@@ -28,7 +28,7 @@ Every generated stock research report features 8 comprehensive sections:
 5. **4. Returns & Capital Allocation**: ROCE, ROE, core ROIC (ex-cash), incremental ROIC, WACC comparison, and 3-point capital allocation scorecard.
 6. **5. Management & Guidance**: Guidance disclosure review, multi-year strategic target execution tracking (`BEAT`, `MET`, `ON TRACK`), and earnings conference call commentary.
 7. **6. Ownership & Peer Matrix**: Quarterly shareholding pattern (Promoter, Pledging, FII, DII, Public), governance score, and live peer comparison table.
-8. **8. CHART (Official Screener.in & Chartink / TradingView)**:
+8. **8. CHART (Official Screener.in & TradingView)**:
    - **Authentic Historical Price Stream**: Daily closing prices and volume directly from Screener.in official chart API. Zero synthetic or random candles.
    - **Technical Indicators**: Computed directly over genuine historical closing prices:
      - Simple Moving Averages: **SMA 20**, **SMA 50**, **SMA 100**, **SMA 200**
@@ -39,7 +39,7 @@ Every generated stock research report features 8 comprehensive sections:
    - **Interactive Overlay Toggles**: One-click toggles for individual moving average overlays without reloading.
    - **Multi-Timeframe Controls**: `1M`, `3M`, `6M`, `1Yr`, `3Yr`, `5Yr`, `10Yr`, `Max`.
    - **Live Institutional Candlestick Widget**: Integrated TradingView candlestick chart (`NSE:{symbol}` or `BSE:{code}`).
-   - **Direct Technical Scanners**: Instant one-click jump to Chartink live technical breakouts and Screener filings.
+   - **Direct Financial & Chart Links**: Instant one-click jump to full Screener filings and TradingView multi-timeframe charts.
    - **Strict Data Decoupling**: Independent error boundary ensures chart errors never block the 7 fundamental audit sections. Historical market actuals are visibly distinguished from model fair-value targets.
 
 ### 3. Non-Blocking Terminal Error Handling

@@ -461,7 +461,7 @@ def generate_terminal_html(r: dict) -> str:
     <button class="tab-btn" onclick="switchTab(event, 'tab-mgmt')">5. Management & Guidance</button>
     <button class="tab-btn" onclick="switchTab(event, 'tab-peers')">6. Ownership & Peers</button>
     <button class="tab-btn" onclick="switchTab(event, 'tab-verification')">7. Data Verification (25+)</button>
-    <button class="tab-btn" onclick="switchTab(event, 'tab-charts')">8. Stock Charts (Screener & Chartink)</button>
+    <button class="tab-btn" onclick="switchTab(event, 'tab-charts')">8. Stock Charts (Screener.in)</button>
   </div>
 
 
@@ -1157,7 +1157,7 @@ def generate_terminal_html(r: dict) -> str:
     </div>
   </div>
 
-  <!-- TAB 8: STOCK CHARTS (OFFICIAL SCREENER & CHARTINK / TRADINGVIEW) -->
+  <!-- TAB 8: STOCK CHARTS (OFFICIAL SCREENER.IN & TRADINGVIEW) -->
   <div id="tab-charts" class="tab-content">
     <div class="dashboard-grid">
       
@@ -1280,22 +1280,19 @@ def generate_terminal_html(r: dict) -> str:
         </div>
       </div>
 
-      <!-- LIVE TECHNICAL CANDLESTICK & CHARTINK SCANS -->
+      <!-- LIVE TECHNICAL CANDLESTICK & TRADINGVIEW -->
       <div class="col-12">
         <div class="card">
           <div class="card-title">
-            <span>Live Technical Candlestick Chart (Chartink & TradingView Institutional Feed)</span>
+            <span>Live Technical Candlestick Chart (TradingView Institutional Feed)</span>
             <span class="sa">REAL-TIME CANDLES</span>
           </div>
 
           <!-- TradingView Advanced Real-Time Widget -->
           <div id="tv_chart_container" style="height: 480px; width: 100%; border-radius: 6px; overflow: hidden; border: 1px solid var(--border);"></div>
 
-          <!-- External Scanner & Analysis Buttons -->
+          <!-- External Analysis Buttons -->
           <div class="ext-links-strip">
-            <a href="https://chartink.com/stocks/{ticker}.html" target="_blank" class="ext-link-btn">
-              📊 <strong>Open on Chartink.com</strong> (Live Candlestick, RSI, MACD & Breakout Scanners) ↗
-            </a>
             <a href="https://www.screener.in/company/{ticker}/" target="_blank" class="ext-link-btn">
               📈 <strong>Open on Screener.in</strong> (Full Financial Statements & Filings) ↗
             </a>
