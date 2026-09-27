@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Indian Stock Fundamental Terminal</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+  <!-- Top App Navigation -->
+  <header class="app-header">
+    <div class="header-container">
+      <div class="brand">
+        <span class="brand-glyph">⚡</span>
+        <div class="brand-text">
+          <span class="brand-name">FUNDAMENTAL TERMINAL</span>
+          <span class="brand-sub">BHARAT EQUITIES INTELLIGENCE</span>
+        </div>
+      </div>
+      <div class="header-meta">
+        <div class="live-pill">
+          <span class="live-dot"></span>
+          <span>NSE / BSE LIVE CONNECTED</span>
+        </div>
+        <div class="stat-badge">2,000+ LISTED EQUITIES</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Query Section -->
+  <section class="hero-section">
+    <div class="hero-container">
+      <h1 class="hero-title">Instant Institutional-Grade Fundamental Reports</h1>
+      <p class="hero-desc">
+        Type any Indian company name or NSE/BSE ticker, pick your horizon, and generate a 35-point audit with fair value bands, 8-quarter beat/miss momentum, and red flags scan in seconds.
+      </p>
+
+      <div class="search-card">
+        <div class="search-row">
+          <div class="input-wrapper">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="stockInput" autocomplete="off" placeholder="Search company e.g. Reliance, TCS, CarTrade, HDFC Bank, Tata Motors..." />
+            <div id="autocompleteDropdown" class="autocomplete-dropdown hidden"></div>
+          </div>
+          <button id="generateBtn" class="btn-primary">
+            <span>⚡ Generate Report</span>
+            <span class="kbd-hint">↵ Enter</span>
+          </button>
+        </div>
+
+        <div class="controls-row">
+          <div class="horizon-block">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+              <span class="controls-label">INVESTMENT HORIZON:</span>
+              <span class="horizon-badge" id="horizonLabel" style="font-size: 12px; font-weight: 700; color: var(--cyan); background: rgba(6, 182, 212, 0.1); border: 1px solid rgba(6, 182, 212, 0.3); padding: 2px 8px; border-radius: 4px; font-family: var(--font-mono);">3 Years</span>
+            </div>
+            <div class="horizon-pills" id="horizonGroup">
+              <button class="pill-btn" data-horizon="1">1Y</button>
+              <button class="pill-btn" data-horizon="2">2Y</button>
+              <button class="pill-btn active" data-horizon="3">3Y</button>
+              <button class="pill-btn" data-horizon="4">4Y</button>
+              <button class="pill-btn" data-horizon="5">5Y</button>
+              <button class="pill-btn" data-horizon="6">6Y</button>
+              <button class="pill-btn" data-horizon="7">7Y</button>
+              <button class="pill-btn" data-horizon="8">8Y</button>
+              <button class="pill-btn" data-horizon="9">9Y</button>
+              <button class="pill-btn" data-horizon="10">10Y</button>
+            </div>
+          </div>
+
+          <div class="popular-block">
+            <span class="controls-label">TRENDING:</span>
+            <div class="popular-chips">
+              <button class="chip" data-ticker="CARTRADE">CarTrade</button>
+              <button class="chip" data-ticker="RELIANCE">Reliance</button>
+              <button class="chip" data-ticker="TCS">TCS</button>
+              <button class="chip" data-ticker="HDFCBANK">HDFC Bank</button>
+              <button class="chip" data-ticker="TATAMOTORS">Tata Motors</button>
+              <button class="chip" data-ticker="ZOMATO">Zomato</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Loading State -->
+  <div id="loadingOverlay" class="loading-container hidden">
+    <div class="loader-box">
+      <div class="spinner"></div>
+      <div class="loading-title">Synthesizing Fundamental Terminal Report...</div>
+      <div class="loading-steps" id="loadingSteps">
+        <div class="step active">▸ Resolving official NSE/BSE filings</div>
+        <div class="step">▸ Extracting pre-computed CAGR & Balance Sheets</div>
+        <div class="step">▸ Auditing 10-point red flags & governance</div>
+        <div class="step">▸ Calculating Fair Value bands & margin of safety</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Terminal Report View Area -->
+  <main id="reportContainer" class="report-area hidden">
+    <div class="terminal-shell">
+
+      <!-- Action Bar -->
+      <div class="terminal-action-bar">
+        <div class="tab-indicator" id="reportHeaderTitle">Report View</div>
+        <div class="action-buttons">
+          <button id="downloadBtn" class="btn-secondary">📥 Download Standalone HTML</button>
+          <button id="printBtn" class="btn-secondary">🖨️ Print / PDF</button>
+        </div>
+      </div>
+
+      <!-- Report Card -->
+      <div class="terminal-body" id="terminalOutput">
+        <!-- Rendered dynamically by app.js -->
+      </div>
+
+    </div>
+  </main>
+
+  <footer class="app-footer">
+    <div class="footer-container">
+      <div>© 2026 Fundamental Terminal Bharat · Real-time equity data sourced directly from public exchange filings.</div>
+      <div class="footer-sebi">SEBI REGULATORY DISCLAIMER: For educational and institutional research purposes only. Not investment advice or a solicitation to buy or sell securities.</div>
+    </div>
+  </footer>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
