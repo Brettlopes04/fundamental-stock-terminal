@@ -664,6 +664,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (targetContent) targetContent.classList.add('active');
       });
     });
+
+    initTerminalCharts(r);
+  }
+
   let chartJsInstance = null;
   let tvWidgetInstanceLoaded = false;
   let currentChartMetric = 'Price-DMA50-DMA200-Volume';
