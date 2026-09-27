@@ -1,4 +1,6 @@
 import math
+from engine.scraper import fetch_chart_data
+
 
 def is_bfsi_sector(sector: str, industry: str, name: str) -> bool:
     text = f"{sector} {industry} {name}".lower()
@@ -558,7 +560,65 @@ def analyze_stock(raw_data: dict, horizon_years: int = 3) -> dict:
         {"num": 25, "item": "Statutory Audit Status", "val": "Clean / Unmodified", "src": "Annual Report", "confirmed": "✓"},
     ]
 
+    # Authentic Technical Chart Data & Moving Average Analysis (from Screener official API)
+    company_id = raw_data.get("company_id", "")
+    warehouse_id = raw_data.get("warehouse_id", "")
+    chart_days = min(3652, max(365, horizon_years * 365))
+
+    chart_data = {}
+    dma_50 = 0.0
+    dma_200 = 0.0
+    cmp_vs_50dma_pct = 0.0
+    cmp_vs_200dma_pct = 0.0
+    ma_trend = "Trend data unavailable"
+    ma_badge = "sn"
+
+    if company_id:
+        try:
+            chart_data = fetch_chart_data(company_id, metric="Price-DMA50-DMA200-Volume", days=chart_days)
+            datasets = chart_data.get("datasets", [])
+            for ds in datasets:
+                m = ds.get("metric", "")
+                vals = ds.get("values", [])
+                if m == "DMA50" and vals:
+                    last_val = vals[-1][1]
+                    try:
+                        dma_50 = float(last_val)
+                    except:
+                        pass
+                elif m == "DMA200" and vals:
+                    last_val = vals[-1][1]
+                    try:
+                        dma_200 = float(last_val)
+                    except:
+                        pass
+
+            if dma_50 > 0:
+                cmp_vs_50dma_pct = round(((cmp - dma_50) / dma_50) * 100, 1)
+            if dma_200 > 0:
+                cmp_vs_200dma_pct = round(((cmp - dma_200) / dma_200) * 100, 1)
+
+            if dma_50 > 0 and dma_200 > 0:
+                if cmp >= dma_50 and cmp >= dma_200 and dma_50 >= dma_200:
+                    ma_trend = "Strong Bullish Structure (Trading Above 50 & 200 DMA · Golden Cross)"
+                    ma_badge = "sg"
+                elif cmp >= dma_200 and dma_50 >= dma_200:
+                    ma_trend = "Bullish Medium-Term (Holding Above 200 DMA Institutional Support)"
+                    ma_badge = "sg"
+                elif cmp < dma_50 and cmp < dma_200 and dma_50 < dma_200:
+                    ma_trend = "Bearish Structure (Trading Below 50 & 200 DMA · Under Pressure)"
+                    ma_badge = "sr"
+                elif cmp < dma_50 and cmp >= dma_200:
+                    ma_trend = "Healthy Pullback (Above 200 DMA Baseline, Testing 50 DMA)"
+                    ma_badge = "sa"
+                else:
+                    ma_trend = "Consolidation / Base-Building Phase"
+                    ma_badge = "sa"
+        except Exception:
+            pass
+
     return {
+
         "name": name,
         "ticker": ticker,
         "bse_code": raw_data.get("bse_code", ""),
@@ -643,7 +703,17 @@ def analyze_stock(raw_data: dict, horizon_years: int = 3) -> dict:
         "shareholding_headers": shareholding_headers,
         "shareholding_rows": shareholding_rows,
         "peers_rows": peers_rows,
-        "peer_footer_note": peer_footer_note,
         "overall_status": overall_status,
-        "verification_table": verification_table
+        "verification_table": verification_table,
+        "company_id": company_id,
+        "warehouse_id": warehouse_id,
+        "chart_data": chart_data,
+        "chart_days": chart_days,
+        "dma_50": dma_50,
+        "dma_200": dma_200,
+        "cmp_vs_50dma_pct": cmp_vs_50dma_pct,
+        "cmp_vs_200dma_pct": cmp_vs_200dma_pct,
+        "ma_trend": ma_trend,
+        "ma_badge": ma_badge
     }
+

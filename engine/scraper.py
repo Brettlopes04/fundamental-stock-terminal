@@ -6,10 +6,23 @@ import urllib.parse
 import urllib.request
 from bs4 import BeautifulSoup
 
-CACHE_DIR = os.path.join(os.path.dirname(__file__), "..", "cache")
-os.makedirs(CACHE_DIR, exist_ok=True)
+import tempfile
 
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+# On serverless platforms (Vercel, AWS Lambda) or read-only filesystems, use /tmp
+is_serverless = os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME") or not os.access(os.path.dirname(__file__), os.W_OK)
+if is_serverless:
+    CACHE_DIR = os.path.join(tempfile.gettempdir(), "fundamental_cache")
+else:
+    CACHE_DIR = os.path.join(os.path.dirname(__file__), "..", "cache")
+
+try:
+    os.makedirs(CACHE_DIR, exist_ok=True)
+except Exception:
+    CACHE_DIR = os.path.join(tempfile.gettempdir(), "fundamental_cache")
+    os.makedirs(CACHE_DIR, exist_ok=True)
+
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+
 
 POPULAR_STOCKS = [
     {"name": "Reliance Industries Ltd", "ticker": "RELIANCE", "url": "/company/RELIANCE/consolidated/"},
@@ -30,25 +43,42 @@ def search_stocks(query: str):
         return POPULAR_STOCKS[:6]
 
     results = []
-    # Try online search API
-    try:
-        encoded_q = urllib.parse.quote(q)
-        url = f"https://www.screener.in/api/company/search/?q={encoded_q}"
-        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-        with urllib.request.urlopen(req, timeout=4) as response:
-            data = json.loads(response.read().decode("utf-8"))
-            for item in data:
-                raw_url = item.get("url", "")
-                ticker_match = re.search(r"/company/([^/]+)/", raw_url)
-                ticker = ticker_match.group(1) if ticker_match else item.get("name", "").split()[0].upper()
-                results.append({
-                    "id": item.get("id"),
-                    "name": item.get("name"),
-                    "ticker": ticker,
-                    "url": raw_url
-                })
-    except Exception as e:
-        pass
+    # Queries to try: first the full query, then variations if no space
+    queries_to_try = [q]
+    if " " not in q and len(q) > 4:
+        # Check known company prefixes
+        for prefix in ["tata", "deepak", "reliance", "welspun", "laurus", "aditya", "bharat", "hindustan", "indian", "adani", "bajaj"]:
+            if q.lower().startswith(prefix) and len(q) > len(prefix):
+                queries_to_try.append(f"{prefix} {q[len(prefix):]}")
+                queries_to_try.append(prefix)
+                break
+
+        # Also try first 5-6 characters
+        if len(q) > 6:
+            queries_to_try.append(q[:6])
+
+    for search_term in queries_to_try:
+        try:
+            encoded_q = urllib.parse.quote(search_term)
+            url = f"https://www.screener.in/api/company/search/?q={encoded_q}"
+            req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = json.loads(response.read().decode("utf-8"))
+                for item in data:
+                    raw_url = item.get("url", "")
+                    ticker_match = re.search(r"/company/([^/]+)/", raw_url)
+                    ticker = ticker_match.group(1) if ticker_match else item.get("name", "").split()[0].upper()
+                    if not any(r.get("url") == raw_url for r in results):
+                        results.append({
+                            "id": item.get("id"),
+                            "name": item.get("name"),
+                            "ticker": ticker,
+                            "url": raw_url
+                        })
+            if results:
+                break
+        except Exception:
+            pass
 
     # If results is empty or failed, filter from popular
     if not results:
@@ -58,6 +88,7 @@ def search_stocks(query: str):
                 results.append(s)
 
     return results
+
 
 def clean_num(val_str):
     if not val_str:
@@ -210,12 +241,18 @@ def parse_screener_page(html: str, source_url: str):
     else:
         data["shareholding"] = shp
 
+    # Extract company_id & warehouse_id
+    c_ids = re.findall(r'/api/company/(\d+)/', html)
+    data["company_id"] = c_ids[0] if c_ids else ""
+    wids = re.findall(r'data-warehouse-id="(\d+)"', html)
+    data["warehouse_id"] = wids[0] if wids else ""
+
     # Fetch peers from Screener API
     peers = []
-    wids = re.findall(r'data-warehouse-id="(\d+)"', html)
-    if wids:
+    wid_for_peers = data["warehouse_id"]
+    if wid_for_peers:
         try:
-            peer_url = f"https://www.screener.in/api/company/{wids[0]}/peers/"
+            peer_url = f"https://www.screener.in/api/company/{wid_for_peers}/peers/"
             req = urllib.request.Request(peer_url, headers={"User-Agent": USER_AGENT})
             with urllib.request.urlopen(req, timeout=5) as p_res:
                 p_soup = BeautifulSoup(p_res.read().decode("utf-8"), "html.parser")
@@ -254,8 +291,33 @@ def parse_screener_page(html: str, source_url: str):
 
     return data
 
+
+def fetch_chart_data(company_id: str, metric: str = "Price-DMA50-DMA200-Volume", days: int = 1095):
+    """
+    Fetch genuine historical chart data directly from Screener.in's official API
+    q options:
+    - Price-DMA50-DMA200-Volume (Price, 50 DMA, 200 DMA, Volume + Delivery %)
+    - Price to Earning-Median PE-EPS (PE ratio, 10Y Median PE, EPS)
+    - Price to book value-Median PBV-Book value (Price to Book, Median PBV)
+    - GPM-OPM-NPM-Quarter Sales (Sales and Margins)
+    """
+    if not company_id:
+        return {"datasets": []}
+
+    encoded_metric = urllib.parse.quote(metric)
+    url = f"https://www.screener.in/api/company/{company_id}/chart/?q={encoded_metric}&days={days}"
+    headers = {"User-Agent": USER_AGENT}
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=6) as res:
+            return json.loads(res.read().decode("utf-8"))
+    except Exception as e:
+        return {"datasets": [], "error": str(e)}
+
+
 def get_stock_data(query_or_ticker: str, force_refresh: bool = False):
-    slug = query_or_ticker.strip().upper()
+    query = query_or_ticker.strip()
+    slug = re.sub(r'[^A-Za-z0-9_]', '', query).upper()
     cache_file = os.path.join(CACHE_DIR, f"{slug}.json")
 
     # Check cache (12 hour expiration)
@@ -268,15 +330,40 @@ def get_stock_data(query_or_ticker: str, force_refresh: bool = False):
         except Exception:
             pass
 
-    # Find matching company URL
-    url = f"/company/{slug}/consolidated/"
-    # If it's a search term rather than exact ticker
-    if " " in query_or_ticker or len(slug) > 15:
-        matches = search_stocks(query_or_ticker)
-        if matches:
-            url = matches[0]["url"]
+    html = None
+    final_url = None
 
-    html, final_url = fetch_company_html(url)
+    # Step 1: If it looks like a clean ticker or BSE code, attempt direct fetch first
+    if len(slug) >= 2 and len(slug) <= 15 and not any(c.isspace() for c in query):
+        try:
+            url = f"/company/{slug}/consolidated/"
+            html, final_url = fetch_company_html(url)
+        except Exception:
+            try:
+                url = f"/company/{slug}/"
+                html, final_url = fetch_company_html(url)
+            except Exception:
+                html = None
+
+    # Step 2: Fallback to searching Screener for company name, partial query or ticker mapping
+    if not html:
+        matches = search_stocks(query)
+        if matches:
+            top_match = matches[0]
+            matched_url = top_match.get("url", "")
+            try:
+                html, final_url = fetch_company_html(matched_url)
+            except Exception:
+                if "/consolidated/" in matched_url:
+                    fallback_url = matched_url.replace("/consolidated/", "/")
+                    try:
+                        html, final_url = fetch_company_html(fallback_url)
+                    except Exception:
+                        pass
+
+    if not html:
+        raise ValueError(f"Stock not found for '{query_or_ticker}'. Please verify the stock ticker or company name.")
+
     parsed = parse_screener_page(html, final_url)
 
     # Save cache
@@ -287,3 +374,4 @@ def get_stock_data(query_or_ticker: str, force_refresh: bool = False):
         pass
 
     return parsed
+

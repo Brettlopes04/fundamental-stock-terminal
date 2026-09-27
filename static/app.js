@@ -37,7 +37,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (evt && evt.currentTarget) {
       evt.currentTarget.classList.add('active');
     }
+    if (tabId === 'tab-charts' && window.onChartsTabActivated) {
+      window.onChartsTabActivated();
+    }
   };
+
 
   // Horizon Selection
   horizonGroup.addEventListener('click', (e) => {
@@ -192,8 +196,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 450);
 
     fetch(`/api/report?query=${encodeURIComponent(query)}&horizon=${horizon}`)
-      .then(res => {
-        if (!res.ok) throw new Error('Stock not found or network error');
+      .then(async res => {
+        if (!res.ok) {
+          let detail = 'Stock not found or network error';
+          try {
+            const errData = await res.json();
+            if (errData && errData.detail) detail = errData.detail;
+          } catch (_) {}
+          throw new Error(detail);
+        }
         return res.json();
       })
       .then(data => {
@@ -239,9 +250,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
           });
         });
+        initTerminalCharts(r);
         return;
       }
     }
+
 
     const strokeColor = r.confidence_score >= 9 ? '#34D399' : (r.confidence_score >= 6 ? '#FBBF24' : '#F87171');
     const mosClass = r.mos_pct >= 0 ? 'fv-mos-pos' : 'fv-mos-neg';
@@ -651,9 +664,289 @@ document.addEventListener('DOMContentLoaded', () => {
         if (targetContent) targetContent.classList.add('active');
       });
     });
+  let chartJsInstance = null;
+  let tvWidgetInstanceLoaded = false;
+  let currentChartMetric = 'Price-DMA50-DMA200-Volume';
+  let currentChartDays = 1095;
+  let activeStockData = null;
+
+  function initTerminalCharts(r) {
+    activeStockData = r;
+    currentChartMetric = 'Price-DMA50-DMA200-Volume';
+    currentChartDays = r.chart_days || (r.horizon_years * 365);
+    chartJsInstance = null;
+    tvWidgetInstanceLoaded = false;
+
+    // Connect metric buttons
+    const metricBtns = terminalOutput.querySelectorAll('.chart-metric-btn');
+    metricBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        metricBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const onclickAttr = btn.getAttribute('onclick') || '';
+        const match = onclickAttr.match(/switchScreenerMetric\(['"]([^'"]+)['"]/);
+        if (match) {
+          currentChartMetric = match[1];
+          reloadChartData();
+        }
+      });
+    });
+
+    // Connect time buttons
+    const timeBtns = terminalOutput.querySelectorAll('.chart-time-btn');
+    timeBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        timeBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const onclickAttr = btn.getAttribute('onclick') || '';
+        const match = onclickAttr.match(/switchScreenerDays\((\d+)/);
+        if (match) {
+          currentChartDays = parseInt(match[1], 10);
+          reloadChartData();
+        }
+      });
+    });
+
+    window.onChartsTabActivated = () => {
+      setTimeout(() => {
+        if (!chartJsInstance) {
+          drawScreenerChart(activeStockData.chart_data || {}, currentChartMetric);
+        } else {
+          chartJsInstance.resize();
+        }
+        if (!tvWidgetInstanceLoaded) {
+          loadTradingViewWidget(activeStockData);
+        }
+      }, 50);
+    };
+  }
+
+  function reloadChartData() {
+    if (!activeStockData || !activeStockData.company_id) {
+      if (activeStockData && activeStockData.chart_data) {
+        drawScreenerChart(activeStockData.chart_data, currentChartMetric);
+      }
+      return;
+    }
+    fetch(`/api/chart?company_id=${encodeURIComponent(activeStockData.company_id)}&metric=${encodeURIComponent(currentChartMetric)}&days=${currentChartDays}`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && data.chart) {
+          drawScreenerChart(data.chart, currentChartMetric);
+        }
+      })
+      .catch(() => {
+        if (activeStockData.chart_data) {
+          drawScreenerChart(activeStockData.chart_data, currentChartMetric);
+        }
+      });
+  }
+
+  function drawScreenerChart(chartData, metric) {
+    const canvas = document.getElementById('screenerOfficialCanvas');
+    if (!canvas || typeof Chart === 'undefined') return;
+    const ctx = canvas.getContext('2d');
+    const datasets = (chartData && chartData.datasets) ? chartData.datasets : [];
+    if (datasets.length === 0) return;
+
+    let dateLabels = [];
+    const primaryDs = datasets[0];
+    if (primaryDs && primaryDs.values) {
+      dateLabels = primaryDs.values.map(v => v[0]);
+    }
+
+    const chartDatasets = [];
+
+    if (metric === 'Price-DMA50-DMA200-Volume') {
+      const priceMap = {}, dma50Map = {}, dma200Map = {}, volMap = {};
+      datasets.forEach(d => {
+        if (d.metric === 'Price') {
+          d.values.forEach(v => { priceMap[v[0]] = parseFloat(v[1]); });
+        } else if (d.metric === 'DMA50') {
+          d.values.forEach(v => { dma50Map[v[0]] = parseFloat(v[1]); });
+        } else if (d.metric === 'DMA200') {
+          d.values.forEach(v => { dma200Map[v[0]] = parseFloat(v[1]); });
+        } else if (d.metric === 'Volume') {
+          d.values.forEach(v => { volMap[v[0]] = v[1]; });
+        }
+      });
+
+      chartDatasets.push({
+        label: 'Price (₹)',
+        data: dateLabels.map(d => priceMap[d] !== undefined ? priceMap[d] : null),
+        borderColor: '#38bdf8',
+        backgroundColor: 'rgba(56, 189, 248, 0.08)',
+        borderWidth: 2,
+        fill: true,
+        yAxisID: 'yPrice',
+        pointRadius: 0,
+        tension: 0.1
+      });
+
+      chartDatasets.push({
+        label: '50 DMA (₹)',
+        data: dateLabels.map(d => dma50Map[d] !== undefined ? dma50Map[d] : null),
+        borderColor: '#f59e0b',
+        borderWidth: 1.8,
+        borderDash: [3, 2],
+        fill: false,
+        yAxisID: 'yPrice',
+        pointRadius: 0,
+        tension: 0.1
+      });
+
+      chartDatasets.push({
+        label: '200 DMA (₹)',
+        data: dateLabels.map(d => dma200Map[d] !== undefined ? dma200Map[d] : null),
+        borderColor: '#a855f7',
+        borderWidth: 2,
+        fill: false,
+        yAxisID: 'yPrice',
+        pointRadius: 0,
+        tension: 0.1
+      });
+
+      chartDatasets.push({
+        type: 'bar',
+        label: 'Volume',
+        data: dateLabels.map(d => volMap[d] !== undefined ? volMap[d] : null),
+        backgroundColor: 'rgba(16, 185, 129, 0.25)',
+        yAxisID: 'yVol',
+        barPercentage: 0.8
+      });
+
+    } else if (metric === 'Price to Earning-Median PE-EPS') {
+      const peMap = {}, medPeMap = {}, epsMap = {};
+      datasets.forEach(d => {
+        if (d.metric === 'Price to Earning') {
+          d.values.forEach(v => { peMap[v[0]] = parseFloat(v[1]); });
+        } else if (d.metric === 'Median PE') {
+          d.values.forEach(v => { medPeMap[v[0]] = parseFloat(v[1]); });
+        } else if (d.metric === 'EPS') {
+          d.values.forEach(v => { epsMap[v[0]] = parseFloat(v[1]); });
+        }
+      });
+
+      chartDatasets.push({
+        label: 'P/E Multiple',
+        data: dateLabels.map(d => peMap[d] !== undefined ? peMap[d] : null),
+        borderColor: '#06b6d4',
+        borderWidth: 2,
+        yAxisID: 'yPrice',
+        pointRadius: 0
+      });
+
+      chartDatasets.push({
+        label: '10Y Median P/E',
+        data: dateLabels.map(d => medPeMap[d] !== undefined ? medPeMap[d] : null),
+        borderColor: '#f59e0b',
+        borderDash: [4, 3],
+        borderWidth: 1.8,
+        yAxisID: 'yPrice',
+        pointRadius: 0
+      });
+
+      chartDatasets.push({
+        type: 'bar',
+        label: 'TTM EPS (₹)',
+        data: dateLabels.map(d => epsMap[d] !== undefined ? epsMap[d] : null),
+        backgroundColor: 'rgba(52, 211, 153, 0.3)',
+        yAxisID: 'yVol',
+        barPercentage: 0.6
+      });
+    } else {
+      const colors = ['#38bdf8', '#f59e0b', '#10b981', '#a855f7'];
+      datasets.forEach((ds, idx) => {
+        const vMap = {};
+        ds.values.forEach(v => { vMap[v[0]] = parseFloat(v[1]); });
+        chartDatasets.push({
+          label: ds.metric,
+          data: dateLabels.map(d => vMap[d] !== undefined ? vMap[d] : null),
+          borderColor: colors[idx % colors.length],
+          borderWidth: 2,
+          yAxisID: 'yPrice',
+          pointRadius: 0
+        });
+      });
+    }
+
+    if (chartJsInstance) chartJsInstance.destroy();
+
+    chartJsInstance = new Chart(ctx, {
+      type: 'line',
+      data: { labels: dateLabels, datasets: chartDatasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: {
+            position: 'top',
+            labels: { color: '#cbd5e1', font: { size: 11, family: 'system-ui' }, usePointStyle: true }
+          },
+          tooltip: {
+            backgroundColor: '#0f172a',
+            borderColor: '#334155',
+            borderWidth: 1,
+            titleColor: '#38bdf8',
+            bodyColor: '#e2e8f0'
+          }
+        },
+        scales: {
+          x: {
+            ticks: { color: '#64748b', maxTicksLimit: 10, font: { size: 10 } },
+            grid: { color: 'rgba(51, 65, 85, 0.3)' }
+          },
+          yPrice: {
+            type: 'linear',
+            position: 'left',
+            ticks: { color: '#94a3b8', font: { size: 10 } },
+            grid: { color: 'rgba(51, 65, 85, 0.4)' }
+          },
+          yVol: {
+            type: 'linear',
+            position: 'right',
+            grid: { drawOnChartArea: false },
+            ticks: { display: false }
+          }
+        }
+      }
+    });
+  }
+
+  function loadTradingViewWidget(r) {
+    const container = document.getElementById('tv_chart_container');
+    if (!container || tvWidgetInstanceLoaded) return;
+    if (typeof TradingView === 'undefined') return;
+
+    const symb = r.bse_code && !r.ticker ? ('BSE:' + r.bse_code) : ('NSE:' + r.ticker);
+
+    new TradingView.widget({
+      "autosize": true,
+      "symbol": symb,
+      "interval": "D",
+      "timezone": "Asia/Kolkata",
+      "theme": "dark",
+      "style": "1",
+      "locale": "en",
+      "toolbar_bg": "#0b0f19",
+      "enable_publishing": false,
+      "hide_top_toolbar": false,
+      "hide_legend": false,
+      "save_image": false,
+      "container_id": "tv_chart_container",
+      "studies": [
+        "MASimple@tv-basicstudies",
+        "Volume@tv-basicstudies"
+      ]
+    });
+    tvWidgetInstanceLoaded = true;
   }
 
   function escapeHtml(str) {
+
     if (!str) return '';
     return String(str)
       .replace(/&/g, '&amp;')
