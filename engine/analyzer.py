@@ -1,5 +1,6 @@
 import math
 from engine.scraper import fetch_chart_data
+from engine.technical_indicators import process_technical_indicators
 
 
 def is_bfsi_sector(sector: str, industry: str, name: str) -> bool:
@@ -566,6 +567,7 @@ def analyze_stock(raw_data: dict, horizon_years: int = 3) -> dict:
     chart_days = min(3652, max(365, horizon_years * 365))
 
     chart_data = {}
+    technical_summary = {}
     dma_50 = 0.0
     dma_200 = 0.0
     cmp_vs_50dma_pct = 0.0
@@ -575,47 +577,27 @@ def analyze_stock(raw_data: dict, horizon_years: int = 3) -> dict:
 
     if company_id:
         try:
-            chart_data = fetch_chart_data(company_id, metric="Price-DMA50-DMA200-Volume", days=chart_days)
-            datasets = chart_data.get("datasets", [])
-            for ds in datasets:
-                m = ds.get("metric", "")
-                vals = ds.get("values", [])
-                if m == "DMA50" and vals:
-                    last_val = vals[-1][1]
-                    try:
-                        dma_50 = float(last_val)
-                    except:
-                        pass
-                elif m == "DMA200" and vals:
-                    last_val = vals[-1][1]
-                    try:
-                        dma_200 = float(last_val)
-                    except:
-                        pass
+            raw_chart = fetch_chart_data(company_id, metric="Price-DMA50-DMA200-Volume", days=chart_days)
+            if raw_chart and raw_chart.get("datasets"):
+                chart_data = process_technical_indicators(raw_chart)
+                technical_summary = chart_data.get("technical_summary", {})
+                
+                # Extract moving averages & trends
+                dma_50 = technical_summary.get("sma_50") or 0.0
+                dma_200 = technical_summary.get("sma_200") or 0.0
+                if technical_summary.get("trend_desc"):
+                    ma_trend = f"{technical_summary.get('trend_badge', '')} - {technical_summary.get('trend_desc', '')}"
+                if technical_summary.get("trend_color"):
+                    ma_badge = technical_summary.get("trend_color", "sn")
 
-            if dma_50 > 0:
-                cmp_vs_50dma_pct = round(((cmp - dma_50) / dma_50) * 100, 1)
-            if dma_200 > 0:
-                cmp_vs_200dma_pct = round(((cmp - dma_200) / dma_200) * 100, 1)
-
-            if dma_50 > 0 and dma_200 > 0:
-                if cmp >= dma_50 and cmp >= dma_200 and dma_50 >= dma_200:
-                    ma_trend = "Strong Bullish Structure (Trading Above 50 & 200 DMA · Golden Cross)"
-                    ma_badge = "sg"
-                elif cmp >= dma_200 and dma_50 >= dma_200:
-                    ma_trend = "Bullish Medium-Term (Holding Above 200 DMA Institutional Support)"
-                    ma_badge = "sg"
-                elif cmp < dma_50 and cmp < dma_200 and dma_50 < dma_200:
-                    ma_trend = "Bearish Structure (Trading Below 50 & 200 DMA · Under Pressure)"
-                    ma_badge = "sr"
-                elif cmp < dma_50 and cmp >= dma_200:
-                    ma_trend = "Healthy Pullback (Above 200 DMA Baseline, Testing 50 DMA)"
-                    ma_badge = "sa"
-                else:
-                    ma_trend = "Consolidation / Base-Building Phase"
-                    ma_badge = "sa"
-        except Exception:
-            pass
+                if dma_50 > 0:
+                    cmp_vs_50dma_pct = round(((cmp - dma_50) / dma_50) * 100, 1)
+                if dma_200 > 0:
+                    cmp_vs_200dma_pct = round(((cmp - dma_200) / dma_200) * 100, 1)
+            else:
+                chart_data = raw_chart or {"datasets": []}
+        except Exception as e:
+            chart_data = {"datasets": [], "error": str(e)}
 
     return {
 
@@ -714,6 +696,7 @@ def analyze_stock(raw_data: dict, horizon_years: int = 3) -> dict:
         "cmp_vs_50dma_pct": cmp_vs_50dma_pct,
         "cmp_vs_200dma_pct": cmp_vs_200dma_pct,
         "ma_trend": ma_trend,
-        "ma_badge": ma_badge
+        "ma_badge": ma_badge,
+        "technical_summary": technical_summary
     }
 

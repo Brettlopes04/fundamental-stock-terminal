@@ -8,6 +8,19 @@ from bs4 import BeautifulSoup
 
 import tempfile
 
+import tempfile
+import socket
+from engine.security_master import (
+    resolve_symbol,
+    search_security_master,
+    StockNotFoundError,
+    ProviderTimeoutError,
+    ProviderRateLimitError,
+    MissingFinancialsError,
+    ProviderDataError,
+    TerminalException
+)
+
 # On serverless platforms (Vercel, AWS Lambda) or read-only filesystems, use /tmp
 is_serverless = os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME") or not os.access(os.path.dirname(__file__), os.W_OK)
 if is_serverless:
@@ -40,52 +53,52 @@ POPULAR_STOCKS = [
 def search_stocks(query: str):
     q = query.strip()
     if not q:
-        return POPULAR_STOCKS[:6]
+        return search_security_master("")
 
     results = []
-    # Queries to try: first the full query, then variations if no space
+    seen_urls = set()
+
+    # 1. Query Canonical Security Master (instant, offline, disambiguated)
+    local_matches = search_security_master(q, limit=8)
+    for m in local_matches:
+        url = m.get("url", "")
+        if url not in seen_urls:
+            seen_urls.add(url)
+            results.append(m)
+
+    # 2. Query upstream Screener search API for SME / new listings with 4s timeout
     queries_to_try = [q]
     if " " not in q and len(q) > 4:
-        # Check known company prefixes
         for prefix in ["tata", "deepak", "reliance", "welspun", "laurus", "aditya", "bharat", "hindustan", "indian", "adani", "bajaj"]:
             if q.lower().startswith(prefix) and len(q) > len(prefix):
                 queries_to_try.append(f"{prefix} {q[len(prefix):]}")
-                queries_to_try.append(prefix)
                 break
-
-        # Also try first 5-6 characters
-        if len(q) > 6:
-            queries_to_try.append(q[:6])
 
     for search_term in queries_to_try:
         try:
             encoded_q = urllib.parse.quote(search_term)
             url = f"https://www.screener.in/api/company/search/?q={encoded_q}"
             req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-            with urllib.request.urlopen(req, timeout=5) as response:
+            with urllib.request.urlopen(req, timeout=4) as response:
                 data = json.loads(response.read().decode("utf-8"))
                 for item in data:
                     raw_url = item.get("url", "")
-                    ticker_match = re.search(r"/company/([^/]+)/", raw_url)
-                    ticker = ticker_match.group(1) if ticker_match else item.get("name", "").split()[0].upper()
-                    if not any(r.get("url") == raw_url for r in results):
+                    if raw_url and raw_url not in seen_urls:
+                        ticker_match = re.search(r"/company/([^/]+)/", raw_url)
+                        ticker = ticker_match.group(1) if ticker_match else item.get("name", "").split()[0].upper()
+                        seen_urls.add(raw_url)
                         results.append({
                             "id": item.get("id"),
                             "name": item.get("name"),
                             "ticker": ticker,
-                            "url": raw_url
+                            "url": raw_url,
+                            "bse_code": "",
+                            "common_name": item.get("name", "").split()[0]
                         })
-            if results:
+            if len(results) >= 8:
                 break
         except Exception:
             pass
-
-    # If results is empty or failed, filter from popular
-    if not results:
-        q_lower = q.lower()
-        for s in POPULAR_STOCKS:
-            if q_lower in s["name"].lower() or q_lower in s["ticker"].lower():
-                results.append(s)
 
     return results
 
@@ -106,20 +119,34 @@ def fetch_company_html(company_slug_or_url: str):
         rel_url = f"/company/{company_slug_or_url.upper()}/consolidated/"
 
     full_url = f"https://www.screener.in{rel_url}" if not rel_url.startswith("http") else rel_url
-    
-    # Try consolidated, if 404 try standalone
     headers = {"User-Agent": USER_AGENT}
+
     try:
         req = urllib.request.Request(full_url, headers=headers)
-        with urllib.request.urlopen(req, timeout=8) as res:
+        with urllib.request.urlopen(req, timeout=7) as res:
             return res.read().decode("utf-8"), full_url
     except urllib.error.HTTPError as e:
-        if "consolidated" in full_url:
-            fallback_url = full_url.replace("/consolidated/", "/")
-            req = urllib.request.Request(fallback_url, headers=headers)
-            with urllib.request.urlopen(req, timeout=8) as res:
-                return res.read().decode("utf-8"), fallback_url
-        raise e
+        if e.code == 404:
+            if "consolidated" in full_url:
+                fallback_url = full_url.replace("/consolidated/", "/")
+                try:
+                    req = urllib.request.Request(fallback_url, headers=headers)
+                    with urllib.request.urlopen(req, timeout=7) as res:
+                        return res.read().decode("utf-8"), fallback_url
+                except urllib.error.HTTPError as e2:
+                    if e2.code == 404:
+                        raise StockNotFoundError(company_slug_or_url)
+                    elif e2.code == 429:
+                        raise ProviderRateLimitError()
+                    else:
+                        raise ProviderDataError(f"HTTP {e2.code}")
+            raise StockNotFoundError(company_slug_or_url)
+        elif e.code == 429:
+            raise ProviderRateLimitError()
+        else:
+            raise ProviderDataError(f"HTTP {e.code}")
+    except (urllib.error.URLError, TimeoutError, socket.timeout):
+        raise ProviderTimeoutError("Screener Public Exchange Gateway")
 
 def parse_screener_page(html: str, source_url: str):
     soup = BeautifulSoup(html, "html.parser")
@@ -317,7 +344,12 @@ def fetch_chart_data(company_id: str, metric: str = "Price-DMA50-DMA200-Volume",
 
 def get_stock_data(query_or_ticker: str, force_refresh: bool = False):
     query = query_or_ticker.strip()
-    slug = re.sub(r'[^A-Za-z0-9_]', '', query).upper()
+    if not query:
+        raise StockNotFoundError(query_or_ticker)
+
+    # 1. Resolve through Security Master first
+    canonical = resolve_symbol(query)
+    slug = canonical["provider_symbol"] if canonical else re.sub(r'[^A-Za-z0-9_]', '', query).upper()
     cache_file = os.path.join(CACHE_DIR, f"{slug}.json")
 
     # Check cache (12 hour expiration)
@@ -326,15 +358,33 @@ def get_stock_data(query_or_ticker: str, force_refresh: bool = False):
             mtime = os.path.getmtime(cache_file)
             if time.time() - mtime < 12 * 3600:
                 with open(cache_file, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    cached_data = json.load(f)
+                    if cached_data.get("cmp") or cached_data.get("top_ratios"):
+                        return cached_data
         except Exception:
             pass
 
     html = None
     final_url = None
 
-    # Step 1: If it looks like a clean ticker or BSE code, attempt direct fetch first
-    if len(slug) >= 2 and len(slug) <= 15 and not any(c.isspace() for c in query):
+    # Step 1: If canonical resolved, fetch directly
+    if canonical:
+        try:
+            url = f"/company/{canonical['provider_symbol']}/consolidated/"
+            html, final_url = fetch_company_html(url)
+        except StockNotFoundError:
+            try:
+                url = f"/company/{canonical['provider_symbol']}/"
+                html, final_url = fetch_company_html(url)
+            except Exception:
+                html = None
+        except Exception as e:
+            if isinstance(e, TerminalException):
+                raise e
+            html = None
+
+    # Step 2: If not resolved or direct failed, attempt clean slug
+    if not html and len(slug) >= 2 and len(slug) <= 15 and not any(c.isspace() for c in query):
         try:
             url = f"/company/{slug}/consolidated/"
             html, final_url = fetch_company_html(url)
@@ -345,7 +395,7 @@ def get_stock_data(query_or_ticker: str, force_refresh: bool = False):
             except Exception:
                 html = None
 
-    # Step 2: Fallback to searching Screener for company name, partial query or ticker mapping
+    # Step 3: Fallback to searching Screener for company name, partial query or ticker mapping
     if not html:
         matches = search_stocks(query)
         if matches:
@@ -362,9 +412,24 @@ def get_stock_data(query_or_ticker: str, force_refresh: bool = False):
                         pass
 
     if not html:
-        raise ValueError(f"Stock not found for '{query_or_ticker}'. Please verify the stock ticker or company name.")
+        raise StockNotFoundError(query_or_ticker)
 
     parsed = parse_screener_page(html, final_url)
+
+    # Validate essential financials
+    if not parsed.get("cmp") and not parsed.get("quarters", {}).get("headers"):
+        raise MissingFinancialsError(parsed.get("name", query), parsed.get("ticker", query))
+
+    # Enrich with canonical record data if available
+    if canonical:
+        parsed["bse_code"] = parsed.get("bse_code") or canonical.get("bse_code", "")
+        parsed["nse_symbol"] = parsed.get("nse_symbol") or canonical.get("nse_symbol", "")
+        parsed["common_name"] = canonical.get("common_name", parsed.get("name"))
+        parsed["exchange"] = canonical.get("exchange", "NSE & BSE")
+        if not parsed.get("sector") or parsed.get("sector") == "Diversified":
+            parsed["sector"] = canonical.get("sector", parsed.get("sector"))
+        if not parsed.get("industry") or parsed.get("industry") == "General":
+            parsed["industry"] = canonical.get("industry", parsed.get("industry"))
 
     # Save cache
     try:

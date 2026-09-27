@@ -17,6 +17,16 @@ def generate_terminal_html(r: dict) -> str:
     cmp_vs_200dma_pct = r.get('cmp_vs_200dma_pct', 0.0)
     ma_trend = html.escape(str(r.get('ma_trend', 'Consolidation / Base-Building Phase')))
     ma_badge = r.get('ma_badge', 'sa')
+    tech_sum = r.get('technical_summary', {})
+    sma_20_val = f"₹{tech_sum.get('sma_20', 0.0):,.2f}" if tech_sum.get('sma_20') else "N/A"
+    sma_50_val = f"₹{tech_sum.get('sma_50', 0.0):,.2f}" if tech_sum.get('sma_50') else f"₹{dma_50:,.2f}"
+    sma_200_val = f"₹{tech_sum.get('sma_200', 0.0):,.2f}" if tech_sum.get('sma_200') else f"₹{dma_200:,.2f}"
+    ema_20_val = f"₹{tech_sum.get('ema_20', 0.0):,.2f}" if tech_sum.get('ema_20') else "N/A"
+    rsi_14_val = f"{tech_sum.get('rsi_14', 0.0):,.1f}" if tech_sum.get('rsi_14') is not None else "N/A"
+    rsi_desc = html.escape(str(tech_sum.get('rsi_desc', 'RSI Neutral (50)')))
+    macd_line_val = f"{tech_sum.get('macd_line', 0.0):+,.2f}" if tech_sum.get('macd_line') is not None else "N/A"
+    macd_desc = html.escape(str(tech_sum.get('macd_desc', 'Neutral Momentum')))
+    trend_badge = tech_sum.get('trend_badge', 'Consolidation')
     chart_days = r.get('chart_days', horizon * 365)
     chart_json = json.dumps(r.get('chart_data', {}))
     cmp_val = f"{r.get('cmp', 0.0):,.2f}"
@@ -349,6 +359,13 @@ def generate_terminal_html(r: dict) -> str:
     .chart-metric-btn, .chart-time-btn {{ background: #1a2336; border: 1px solid var(--border); color: #94a3b8; padding: 6px 12px; border-radius: 4px; font-size: 12px; cursor: pointer; font-weight: 600; transition: all 0.15s; }}
     .chart-metric-btn:hover, .chart-time-btn:hover {{ background: #26334d; color: #fff; }}
     .chart-metric-btn.active, .chart-time-btn.active {{ background: #3b82f6; color: #fff; border-color: #3b82f6; }}
+    .chart-meta-strip {{ display: flex; align-items: center; gap: 16px; flex-wrap: wrap; background: #0c121e; border: 1px solid var(--border); border-radius: 6px; padding: 10px 16px; margin-bottom: 14px; font-size: 12px; }}
+    .chart-meta-item {{ display: flex; align-items: center; gap: 6px; }}
+    .chart-meta-label {{ color: var(--text-muted); font-weight: 700; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }}
+    .chart-meta-val {{ color: #f8fafc; font-weight: 600; font-family: var(--font-mono); }}
+    .chart-toggle-btn {{ background: #151f32; border: 1px solid var(--border); color: #94a3b8; padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer; font-weight: 600; transition: all 0.15s; }}
+    .chart-toggle-btn:hover {{ background: #1e293b; color: #fff; }}
+    .chart-toggle-btn.active {{ background: rgba(59, 130, 246, 0.2); color: #38bdf8; border-color: #38bdf8; }}
     .dma-indicator-strip {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }}
     .dma-indicator-card {{ background: #111a2c; border: 1px solid var(--border); border-radius: 6px; padding: 12px 14px; }}
     .dma-ind-title {{ font-size: 11px; text-transform: uppercase; color: var(--text-muted); font-weight: 700; }}
@@ -1153,45 +1170,81 @@ def generate_terminal_html(r: dict) -> str:
             <span class="vbadge">AUTHENTIC HISTORICAL API</span>
           </div>
 
-          <!-- DMA Health Indicator Cards -->
-          <div class="dma-indicator-strip">
+          <!-- Metadata Strip -->
+          <div class="chart-meta-strip">
+            <div class="chart-meta-item">
+              <span class="chart-meta-label">SECURITY:</span>
+              <span class="chart-meta-val">{name} ({ticker})</span>
+            </div>
+            <div class="chart-meta-item">
+              <span class="chart-meta-label">EXCHANGE:</span>
+              <span class="chart-meta-val">{'NSE & BSE' if bse_code else 'NSE'}</span>
+            </div>
+            <div class="chart-meta-item">
+              <span class="chart-meta-label">INVESTMENT HORIZON:</span>
+              <span class="chart-meta-val">{horizon}Y Selected</span>
+            </div>
+            <div class="chart-meta-item">
+              <span class="chart-meta-label">DATA FEED:</span>
+              <span class="chart-meta-val">Official Screener.in API</span>
+            </div>
+            <div class="chart-meta-item" style="margin-left: auto;">
+              <span class="vbadge" style="background: rgba(16, 185, 129, 0.12); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.25); font-size: 10px;">
+                ● HISTORICAL MARKET DATA (AUTHENTIC CLOSE & VOLUME) — MODEL TARGETS DECOUPLED
+              </span>
+            </div>
+          </div>
+
+          <!-- Technical & DMA Indicator Strip -->
+          <div class="dma-indicator-strip" style="grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));">
             <div class="dma-indicator-card">
               <div class="dma-ind-title">Current Price (CMP)</div>
               <div class="dma-ind-val">₹{cmp_val}</div>
-              <div class="dma-ind-sub">Live BSE/NSE Cross-Verified</div>
+              <div class="dma-ind-sub">Live BSE/NSE Feed</div>
             </div>
             <div class="dma-indicator-card">
-              <div class="dma-ind-title">50-Day Moving Average</div>
-              <div class="dma-ind-val" style="color: #f59e0b;">₹{dma_50:,.2f}</div>
+              <div class="dma-ind-title">50-Day Moving Avg</div>
+              <div class="dma-ind-val" style="color: #10b981;">{sma_50_val}</div>
               <div class="dma-ind-sub" style="color: {'#10b981' if cmp_vs_50dma_pct >= 0 else '#ef4444'}; font-weight: 600;">
                 {f'+{cmp_vs_50dma_pct}%' if cmp_vs_50dma_pct >= 0 else f'{cmp_vs_50dma_pct}%'} vs 50 DMA
               </div>
             </div>
             <div class="dma-indicator-card">
-              <div class="dma-ind-title">200-Day Moving Average</div>
-              <div class="dma-ind-val" style="color: #a855f7;">₹{dma_200:,.2f}</div>
+              <div class="dma-ind-title">200-Day Moving Avg</div>
+              <div class="dma-ind-val" style="color: #ef4444;">{sma_200_val}</div>
               <div class="dma-ind-sub" style="color: {'#10b981' if cmp_vs_200dma_pct >= 0 else '#ef4444'}; font-weight: 600;">
                 {f'+{cmp_vs_200dma_pct}%' if cmp_vs_200dma_pct >= 0 else f'{cmp_vs_200dma_pct}%'} vs 200 DMA
               </div>
             </div>
             <div class="dma-indicator-card">
-              <div class="dma-ind-title">Technical Moving Average Structure</div>
-              <div class="dma-ind-val" style="font-size: 14px; margin-top: 6px;">
-                <span class="{ma_badge}">{ma_trend}</span>
+              <div class="dma-ind-title">20 SMA / 20 EMA</div>
+              <div class="dma-ind-val" style="color: #ec4899; font-size: 14px; margin-top: 6px;">{sma_20_val} / {ema_20_val}</div>
+              <div class="dma-ind-sub">Short-term Momentum</div>
+            </div>
+            <div class="dma-indicator-card">
+              <div class="dma-ind-title">RSI (14 Daily)</div>
+              <div class="dma-ind-val" style="color: #38bdf8;">{rsi_14_val}</div>
+              <div class="dma-ind-sub" style="font-weight: 600;">{rsi_desc}</div>
+            </div>
+            <div class="dma-indicator-card">
+              <div class="dma-ind-title">Trend Structure</div>
+              <div class="dma-ind-val" style="font-size: 12px; margin-top: 6px;">
+                <span class="{ma_badge}">{trend_badge}</span>
               </div>
-              <div class="dma-ind-sub">Institutional Trend Filter</div>
+              <div class="dma-ind-sub">{macd_desc}</div>
             </div>
           </div>
 
           <!-- Chart Controls Toolbar -->
           <div class="chart-toolbar">
             <div class="chart-btn-group">
-              <button class="chart-metric-btn active" id="btnMetricPrice" onclick="switchScreenerMetric('Price-DMA50-DMA200-Volume', this)">📈 Price & 50/200 DMA + Volume</button>
-              <button class="chart-metric-btn" id="btnMetricPE" onclick="switchScreenerMetric('Price to Earning-Median PE-EPS', this)">📊 P/E Ratio vs Median P/E vs EPS</button>
+              <button class="chart-metric-btn active" id="btnMetricPrice" onclick="switchScreenerMetric('Price-DMA50-DMA200-Volume', this)">📈 Price & Moving Averages</button>
+              <button class="chart-metric-btn" id="btnMetricPE" onclick="switchScreenerMetric('Price to Earning-Median PE-EPS', this)">📊 P/E vs Median P/E vs EPS</button>
               <button class="chart-metric-btn" id="btnMetricPB" onclick="switchScreenerMetric('Price to book value-Median PBV-Book value', this)">💼 Price to Book (P/B)</button>
             </div>
             <div class="chart-btn-group">
               <button class="chart-time-btn" onclick="switchScreenerDays(30, this)">1M</button>
+              <button class="chart-time-btn" onclick="switchScreenerDays(90, this)">3M</button>
               <button class="chart-time-btn" onclick="switchScreenerDays(180, this)">6M</button>
               <button class="chart-time-btn {'active' if horizon == 1 else ''}" onclick="switchScreenerDays(365, this)">1Yr</button>
               <button class="chart-time-btn {'active' if horizon in [2, 3] else ''}" onclick="switchScreenerDays(1095, this)">3Yr</button>
@@ -1201,13 +1254,27 @@ def generate_terminal_html(r: dict) -> str:
             </div>
           </div>
 
+          <!-- Technical Overlay Toggle Toolbar -->
+          <div class="chart-toolbar" style="margin-top: -6px; padding: 6px 14px; background: #0b111e; border-top: none;">
+            <div style="font-size: 11px; color: var(--text-muted); font-weight: 700; margin-right: 6px;">INDICATOR OVERLAYS:</div>
+            <div class="chart-btn-group">
+              <button class="chart-toggle-btn" id="btnToggleSMA20" onclick="toggleChartDataset('SMA20', this)">SMA 20</button>
+              <button class="chart-toggle-btn active" id="btnToggleSMA50" onclick="toggleChartDataset('SMA50', this)">SMA 50</button>
+              <button class="chart-toggle-btn" id="btnToggleSMA100" onclick="toggleChartDataset('SMA100', this)">SMA 100</button>
+              <button class="chart-toggle-btn active" id="btnToggleSMA200" onclick="toggleChartDataset('SMA200', this)">SMA 200</button>
+              <button class="chart-toggle-btn" id="btnToggleEMA20" onclick="toggleChartDataset('EMA20', this)">EMA 20</button>
+              <button class="chart-toggle-btn" id="btnToggleEMA50" onclick="toggleChartDataset('EMA50', this)">EMA 50</button>
+              <button class="chart-toggle-btn active" id="btnToggleVol" onclick="toggleChartDataset('Volume', this)">Volume</button>
+            </div>
+          </div>
+
           <!-- Responsive Chart.js Canvas -->
           <div class="chart-wrapper">
             <canvas id="screenerOfficialCanvas"></canvas>
           </div>
           
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 11px; color: var(--text-muted);">
-            <div>*Direct data stream from Screener.in official historical chart API. Volume bars indicate total daily exchanged shares with delivery ratio.</div>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 11px; color: var(--text-muted); flex-wrap: wrap; gap: 8px;">
+            <div>*Direct data stream from Screener.in official historical chart API. Volume bars indicate total daily exchanged shares with delivery ratio. Moving averages computed over authentic daily closes.</div>
             <a href="https://www.screener.in/company/{ticker}/#chart" target="_blank" class="ext-link-btn" style="padding: 4px 10px; font-size: 11px;">Open on Screener.in ↗</a>
           </div>
 

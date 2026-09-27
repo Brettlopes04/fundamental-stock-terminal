@@ -1,4 +1,48 @@
 document.addEventListener('DOMContentLoaded', () => {
+
+  // Error Card Handlers
+  function showErrorCard(err) {
+    const errorCard = document.getElementById('errorCard');
+    if (!errorCard) return;
+    const errorCodeBadge = document.getElementById('errorCodeBadge');
+    const errorStatusText = document.getElementById('errorStatusText');
+    const errorTitle = document.getElementById('errorTitle');
+    const errorMessage = document.getElementById('errorMessage');
+    const suggestionsList = document.getElementById('suggestionsList');
+
+    if (errorCodeBadge) errorCodeBadge.textContent = err.error_code || 'ERROR';
+    if (errorStatusText) errorStatusText.textContent = err.http_status ? `HTTP ${err.http_status}` : '';
+    if (errorTitle) errorTitle.textContent = err.title || 'Stock Not Found';
+    if (errorMessage) errorMessage.textContent = err.message || (typeof err === 'string' ? err : 'Could not generate report.');
+
+    if (suggestionsList) {
+      suggestionsList.innerHTML = '';
+      const suggestions = err.suggestions || [
+        'Verify spelling of company name or ticker',
+        'Try major Indian equities: RELIANCE, TCS, INFY, HDFCBANK, TATAMOTORS, CARTRADE, ZOMATO',
+        'Search using 6-digit BSE scrip code (e.g. 500325, 543320)'
+      ];
+      suggestions.forEach(s => {
+        const li = document.createElement('li');
+        li.textContent = s;
+        suggestionsList.appendChild(li);
+      });
+    }
+
+    errorCard.classList.remove('hidden');
+    errorCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }
+
+  function hideErrorCard() {
+    const errorCard = document.getElementById('errorCard');
+    if (errorCard) errorCard.classList.add('hidden');
+  }
+
+  const errorCloseBtn = document.getElementById('errorCloseBtn');
+  if (errorCloseBtn) errorCloseBtn.addEventListener('click', hideErrorCard);
+  const errorDismissBtn = document.getElementById('errorDismissBtn');
+  if (errorDismissBtn) errorDismissBtn.addEventListener('click', hideErrorCard);
+
   const stockInput = document.getElementById('stockInput');
   const autocompleteDropdown = document.getElementById('autocompleteDropdown');
   const generateBtn = document.getElementById('generateBtn');
@@ -195,21 +239,34 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }, 450);
 
+    hideErrorCard();
+    if (chartJsInstance) {
+      try { chartJsInstance.destroy(); } catch (_) {}
+      chartJsInstance = null;
+    }
+    const tvc = document.getElementById('tv_chart_container');
+    if (tvc) tvc.innerHTML = '';
+    tvWidgetInstanceLoaded = false;
+
     fetch(`/api/report?query=${encodeURIComponent(query)}&horizon=${horizon}`)
       .then(async res => {
         if (!res.ok) {
-          let detail = 'Stock not found or network error';
+          let errData = null;
           try {
-            const errData = await res.json();
-            if (errData && errData.detail) detail = errData.detail;
+            errData = await res.json();
           } catch (_) {}
-          throw new Error(detail);
+          throw (errData || {
+            message: 'Stock not found or network error',
+            error_code: res.status === 404 ? 'STOCK_NOT_FOUND' : 'SERVER_ERROR',
+            http_status: res.status
+          });
         }
         return res.json();
       })
       .then(data => {
         clearInterval(stepInterval);
         loadingOverlay.classList.add('hidden');
+        hideErrorCard();
         if (data.success && data.report) {
           renderTerminal(data.report, data.html);
           reportContainer.classList.remove('hidden');
@@ -219,7 +276,7 @@ document.addEventListener('DOMContentLoaded', () => {
       .catch(err => {
         clearInterval(stepInterval);
         loadingOverlay.classList.add('hidden');
-        alert('Could not generate report: ' + err.message);
+        showErrorCard(err);
       });
   }
 
@@ -668,6 +725,40 @@ document.addEventListener('DOMContentLoaded', () => {
     initTerminalCharts(r);
   }
 
+  
+  // Global Chart Controls & Indicator Toggles
+  window.toggleChartDataset = function(metric, btnEl) {
+    if (!chartJsInstance) return;
+    const ds = chartJsInstance.data.datasets.find(d => d.metric === metric);
+    if (ds) {
+      ds.hidden = !ds.hidden;
+      if (btnEl) {
+        if (ds.hidden) {
+          btnEl.classList.remove('active');
+        } else {
+          btnEl.classList.add('active');
+        }
+      }
+      chartJsInstance.update();
+    }
+  };
+
+  window.switchScreenerMetric = function(metric, btnEl) {
+    currentChartMetric = metric;
+    const btns = document.querySelectorAll('.chart-metric-btn');
+    btns.forEach(b => b.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
+    reloadChartData();
+  };
+
+  window.switchScreenerDays = function(days, btnEl) {
+    currentChartDays = days;
+    const btns = document.querySelectorAll('.chart-time-btn');
+    btns.forEach(b => b.classList.remove('active'));
+    if (btnEl) btnEl.classList.add('active');
+    reloadChartData();
+  };
+
   let chartJsInstance = null;
   let tvWidgetInstanceLoaded = false;
   let currentChartMetric = 'Price-DMA50-DMA200-Volume';
@@ -756,69 +847,75 @@ document.addEventListener('DOMContentLoaded', () => {
     if (datasets.length === 0) return;
 
     let dateLabels = [];
-    const primaryDs = datasets[0];
-    if (primaryDs && primaryDs.values) {
-      dateLabels = primaryDs.values.map(v => v[0]);
+    if (chartData.dates && chartData.dates.length > 0) {
+      dateLabels = chartData.dates;
+    } else {
+      const primaryDs = datasets[0];
+      if (primaryDs && primaryDs.values) {
+        dateLabels = primaryDs.values.map(v => v[0]);
+      }
     }
 
     const chartDatasets = [];
 
     if (metric === 'Price-DMA50-DMA200-Volume') {
-      const priceMap = {}, dma50Map = {}, dma200Map = {}, volMap = {};
-      datasets.forEach(d => {
-        if (d.metric === 'Price') {
-          d.values.forEach(v => { priceMap[v[0]] = parseFloat(v[1]); });
-        } else if (d.metric === 'DMA50') {
-          d.values.forEach(v => { dma50Map[v[0]] = parseFloat(v[1]); });
-        } else if (d.metric === 'DMA200') {
-          d.values.forEach(v => { dma200Map[v[0]] = parseFloat(v[1]); });
-        } else if (d.metric === 'Volume') {
-          d.values.forEach(v => { volMap[v[0]] = v[1]; });
+      const metricStyles = {
+        'Price': { color: '#38bdf8', width: 2, fill: true, bg: 'rgba(56, 189, 248, 0.08)', hidden: false, label: 'Closing Price (₹)' },
+        'SMA20': { color: '#ec4899', width: 1.5, dash: [2, 2], hidden: true, label: '20 SMA' },
+        'SMA50': { color: '#10b981', width: 2, hidden: false, label: '50 SMA' },
+        'SMA100': { color: '#f59e0b', width: 1.5, dash: [3, 2], hidden: true, label: '100 SMA' },
+        'SMA200': { color: '#ef4444', width: 2, hidden: false, label: '200 SMA' },
+        'EMA20': { color: '#8b5cf6', width: 1.5, dash: [4, 2], hidden: true, label: '20 EMA' },
+        'EMA50': { color: '#06b6d4', width: 1.5, hidden: true, label: '50 EMA' },
+        'Volume': { type: 'bar', color: 'rgba(148, 163, 184, 0.25)', hidden: false, label: 'Volume' }
+      };
+
+      datasets.forEach(ds => {
+        const m = ds.metric;
+        const style = metricStyles[m] || { color: '#94a3b8', width: 1.5, hidden: false, label: ds.label || m };
+        const vMap = {};
+        (ds.values || []).forEach(v => { vMap[v[0]] = parseFloat(v[1]); });
+
+        if (m === 'Volume' || style.type === 'bar') {
+          chartDatasets.push({
+            type: 'bar',
+            metric: m,
+            label: style.label,
+            data: dateLabels.map(d => vMap[d] !== undefined ? vMap[d] : null),
+            backgroundColor: style.color,
+            yAxisID: 'yVol',
+            barPercentage: 0.8,
+            hidden: style.hidden
+          });
+        } else {
+          chartDatasets.push({
+            type: 'line',
+            metric: m,
+            label: style.label,
+            data: dateLabels.map(d => vMap[d] !== undefined ? vMap[d] : null),
+            borderColor: style.color,
+            backgroundColor: style.bg || 'transparent',
+            borderWidth: style.width,
+            borderDash: style.dash || [],
+            fill: !!style.fill,
+            yAxisID: 'yPrice',
+            pointRadius: 0,
+            tension: 0.1,
+            hidden: style.hidden
+          });
         }
       });
 
-      chartDatasets.push({
-        label: 'Price (₹)',
-        data: dateLabels.map(d => priceMap[d] !== undefined ? priceMap[d] : null),
-        borderColor: '#38bdf8',
-        backgroundColor: 'rgba(56, 189, 248, 0.08)',
-        borderWidth: 2,
-        fill: true,
-        yAxisID: 'yPrice',
-        pointRadius: 0,
-        tension: 0.1
-      });
-
-      chartDatasets.push({
-        label: '50 DMA (₹)',
-        data: dateLabels.map(d => dma50Map[d] !== undefined ? dma50Map[d] : null),
-        borderColor: '#f59e0b',
-        borderWidth: 1.8,
-        borderDash: [3, 2],
-        fill: false,
-        yAxisID: 'yPrice',
-        pointRadius: 0,
-        tension: 0.1
-      });
-
-      chartDatasets.push({
-        label: '200 DMA (₹)',
-        data: dateLabels.map(d => dma200Map[d] !== undefined ? dma200Map[d] : null),
-        borderColor: '#a855f7',
-        borderWidth: 2,
-        fill: false,
-        yAxisID: 'yPrice',
-        pointRadius: 0,
-        tension: 0.1
-      });
-
-      chartDatasets.push({
-        type: 'bar',
-        label: 'Volume',
-        data: dateLabels.map(d => volMap[d] !== undefined ? volMap[d] : null),
-        backgroundColor: 'rgba(16, 185, 129, 0.25)',
-        yAxisID: 'yVol',
-        barPercentage: 0.8
+      // Sync toggle buttons
+      chartDatasets.forEach(ds => {
+        const btn = document.getElementById('btnToggle' + ds.metric) || document.getElementById('btnToggleVol');
+        if (btn && (btn.id === 'btnToggle' + ds.metric || (ds.metric === 'Volume' && btn.id === 'btnToggleVol'))) {
+          if (ds.hidden) {
+            btn.classList.remove('active');
+          } else {
+            btn.classList.add('active');
+          }
+        }
       });
 
     } else if (metric === 'Price to Earning-Median PE-EPS') {
@@ -835,6 +932,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       chartDatasets.push({
         label: 'P/E Multiple',
+        metric: 'PE',
         data: dateLabels.map(d => peMap[d] !== undefined ? peMap[d] : null),
         borderColor: '#06b6d4',
         borderWidth: 2,
@@ -844,6 +942,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       chartDatasets.push({
         label: '10Y Median P/E',
+        metric: 'MedianPE',
         data: dateLabels.map(d => medPeMap[d] !== undefined ? medPeMap[d] : null),
         borderColor: '#f59e0b',
         borderDash: [4, 3],
@@ -854,6 +953,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       chartDatasets.push({
         type: 'bar',
+        metric: 'EPS',
         label: 'TTM EPS (₹)',
         data: dateLabels.map(d => epsMap[d] !== undefined ? epsMap[d] : null),
         backgroundColor: 'rgba(52, 211, 153, 0.3)',
@@ -867,6 +967,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ds.values.forEach(v => { vMap[v[0]] = parseFloat(v[1]); });
         chartDatasets.push({
           label: ds.metric,
+          metric: ds.metric,
           data: dateLabels.map(d => vMap[d] !== undefined ? vMap[d] : null),
           borderColor: colors[idx % colors.length],
           borderWidth: 2,
@@ -876,7 +977,10 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
 
-    if (chartJsInstance) chartJsInstance.destroy();
+    if (chartJsInstance) {
+      try { chartJsInstance.destroy(); } catch (_) {}
+      chartJsInstance = null;
+    }
 
     chartJsInstance = new Chart(ctx, {
       type: 'line',
@@ -924,6 +1028,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const container = document.getElementById('tv_chart_container');
     if (!container || tvWidgetInstanceLoaded) return;
     if (typeof TradingView === 'undefined') return;
+    container.innerHTML = '';
 
     const symb = r.bse_code && !r.ticker ? ('BSE:' + r.bse_code) : ('NSE:' + r.ticker);
 
