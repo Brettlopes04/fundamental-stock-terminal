@@ -1155,7 +1155,6 @@ def generate_terminal_html(r: dict) -> str:
         </tbody>
       </table>
     </div>
-  </div>    </div>
   </div>
 
   <!-- TAB 8: STOCK CHARTS (OFFICIAL SCREENER & CHARTINK / TRADINGVIEW) -->

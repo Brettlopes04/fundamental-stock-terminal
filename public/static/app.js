@@ -806,13 +806,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.onChartsTabActivated = () => {
       setTimeout(() => {
-        if (!chartJsInstance) {
-          drawScreenerChart(activeStockData.chart_data || {}, currentChartMetric);
-        } else {
-          chartJsInstance.resize();
-        }
-        if (!tvWidgetInstanceLoaded) {
-          loadTradingViewWidget(activeStockData);
+        if (activeStockData) {
+          const chartData = activeStockData.chart_data;
+          if (chartData && chartData.datasets && chartData.datasets.length > 0) {
+            drawScreenerChart(chartData, currentChartMetric);
+          } else if (activeStockData.company_id) {
+            reloadChartData();
+          } else if (activeStockData.chart_data) {
+            drawScreenerChart(activeStockData.chart_data, currentChartMetric);
+          }
+          if (!tvWidgetInstanceLoaded) {
+            loadTradingViewWidget(activeStockData);
+          }
         }
       }, 50);
     };
@@ -844,7 +849,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!canvas || typeof Chart === 'undefined') return;
     const ctx = canvas.getContext('2d');
     const datasets = (chartData && chartData.datasets) ? chartData.datasets : [];
-    if (datasets.length === 0) return;
+    if (datasets.length === 0) {
+      if (activeStockData && activeStockData.company_id && !activeStockData._chartFetchedOnce) {
+        activeStockData._chartFetchedOnce = true;
+        reloadChartData();
+      }
+      return;
+    }
 
     let dateLabels = [];
     if (chartData.dates && chartData.dates.length > 0) {
@@ -1027,10 +1038,17 @@ document.addEventListener('DOMContentLoaded', () => {
   function loadTradingViewWidget(r) {
     const container = document.getElementById('tv_chart_container');
     if (!container || tvWidgetInstanceLoaded) return;
-    if (typeof TradingView === 'undefined') return;
-    container.innerHTML = '';
+    if (!r) return;
 
-    const symb = r.bse_code && !r.ticker ? ('BSE:' + r.bse_code) : ('NSE:' + r.ticker);
+    if (typeof TradingView === 'undefined') {
+      setTimeout(() => {
+        if (!tvWidgetInstanceLoaded) loadTradingViewWidget(r);
+      }, 300);
+      return;
+    }
+
+    container.innerHTML = '';
+    const symb = (r.bse_code && !r.ticker) ? ('BSE:' + r.bse_code) : ('NSE:' + (r.nse_symbol || r.ticker));
 
     new TradingView.widget({
       "autosize": true,

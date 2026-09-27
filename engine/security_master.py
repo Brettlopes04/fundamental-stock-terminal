@@ -160,15 +160,27 @@ CANONICAL_EQUITIES: List[Dict[str, Any]] = [
         "nse_symbol": "TATAMOTORS",
         "bse_code": "500570",
         "exchange": "NSE & BSE",
-        "instrument_id": "1418592",
-        "provider_symbol": "TATAMOTORS",
+        "instrument_id": "1285768",
+        "provider_symbol": "TMCV",
         "sector": "Automobile",
         "industry": "Commercial & Passenger Vehicles",
         "aliases": ["TATAMOTORS", "TATA MOTORS", "TMCV", "JLR", "JAGUAR LAND ROVER"]
     },
     {
-        "name": "Eternal Ltd",
+        "name": "Zomato Ltd",
         "common_name": "Zomato",
+        "nse_symbol": "ZOMATO",
+        "bse_code": "543320",
+        "exchange": "NSE & BSE",
+        "instrument_id": "1274894",
+        "provider_symbol": "ETERNAL",
+        "sector": "Consumer Technology",
+        "industry": "Food Delivery & Quick Commerce (Blinkit, District)",
+        "aliases": ["ZOMATO", "ZOMATO LTD", "BLINKIT"]
+    },
+    {
+        "name": "Eternal Ltd",
+        "common_name": "Eternal",
         "nse_symbol": "ETERNAL",
         "bse_code": "543320",
         "exchange": "NSE & BSE",
@@ -176,7 +188,7 @@ CANONICAL_EQUITIES: List[Dict[str, Any]] = [
         "provider_symbol": "ETERNAL",
         "sector": "Consumer Technology",
         "industry": "Food Delivery & Quick Commerce",
-        "aliases": ["ZOMATO", "ETERNAL", "BLINKIT", "ETERNAL LTD", "ZOMATO LTD"]
+        "aliases": ["ETERNAL", "ETERNAL LTD"]
     },
     {
         "name": "Cartrade Tech Ltd",

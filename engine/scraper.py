@@ -360,6 +360,11 @@ def get_stock_data(query_or_ticker: str, force_refresh: bool = False):
                 with open(cache_file, "r", encoding="utf-8") as f:
                     cached_data = json.load(f)
                     if cached_data.get("cmp") or cached_data.get("top_ratios"):
+                        if canonical:
+                            cached_data["ticker"] = canonical.get("nse_symbol", cached_data.get("ticker"))
+                            cached_data["name"] = canonical.get("name", cached_data.get("name"))
+                            cached_data["nse_symbol"] = canonical.get("nse_symbol", cached_data.get("nse_symbol"))
+                            cached_data["bse_code"] = canonical.get("bse_code", cached_data.get("bse_code"))
                         return cached_data
         except Exception:
             pass
@@ -422,8 +427,10 @@ def get_stock_data(query_or_ticker: str, force_refresh: bool = False):
 
     # Enrich with canonical record data if available
     if canonical:
-        parsed["bse_code"] = parsed.get("bse_code") or canonical.get("bse_code", "")
-        parsed["nse_symbol"] = parsed.get("nse_symbol") or canonical.get("nse_symbol", "")
+        parsed["ticker"] = canonical.get("nse_symbol", parsed.get("ticker"))
+        parsed["name"] = canonical.get("name", parsed.get("name"))
+        parsed["bse_code"] = canonical.get("bse_code", "") or parsed.get("bse_code", "")
+        parsed["nse_symbol"] = canonical.get("nse_symbol", "") or parsed.get("nse_symbol", "")
         parsed["common_name"] = canonical.get("common_name", parsed.get("name"))
         parsed["exchange"] = canonical.get("exchange", "NSE & BSE")
         if not parsed.get("sector") or parsed.get("sector") == "Diversified":
