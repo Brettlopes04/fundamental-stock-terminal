@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Indian Stock Fundamental Terminal</title>
-  <link rel="stylesheet" href="/static/style.css?v=2.3">
+  <link rel="stylesheet" href="/static/style.css?v=2.5">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -92,28 +92,6 @@
     </div>
   </section>
 
-  <!-- Non-blocking In-Page Error Card (replaces blocking alert) -->
-  <div id="errorCard" class="error-container hidden">
-    <div class="error-box">
-      <div class="error-header">
-        <div class="error-badge-row">
-          <span class="error-badge" id="errorCodeBadge">STOCK_NOT_FOUND</span>
-          <span class="error-status" id="errorStatusText">HTTP 404</span>
-        </div>
-        <button class="error-close-btn" id="errorCloseBtn" title="Dismiss error">&times;</button>
-      </div>
-      <div class="error-title" id="errorTitle">Stock Not Found</div>
-      <div class="error-message" id="errorMessage">Could not resolve query to an active NSE or BSE listed equity.</div>
-      <div class="error-suggestions-block" id="errorSuggestionsBlock">
-        <div class="suggestions-label">SUGGESTED ACTIONS & VERIFIED SYMBOLS:</div>
-        <ul class="suggestions-list" id="suggestionsList"></ul>
-      </div>
-      <div class="error-actions">
-        <button class="btn-secondary" id="errorDismissBtn" style="padding: 6px 14px; font-size: 12px;">Dismiss</button>
-      </div>
-    </div>
-  </div>
-
 
   <!-- Loading State -->
   <div id="loadingOverlay" class="loading-container hidden">
@@ -157,6 +135,6 @@
     </div>
   </footer>
 
-  <script src="/static/app.js?v=2.4"></script>
+  <script src="/static/app.js?v=2.5"></script>
 </body>
 </html>

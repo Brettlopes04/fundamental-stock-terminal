@@ -1,47 +1,43 @@
 document.addEventListener('DOMContentLoaded', () => {
 
-  // Error Card Handlers
-  function showErrorCard(err) {
-    const errorCard = document.getElementById('errorCard');
-    if (!errorCard) return;
-    const errorCodeBadge = document.getElementById('errorCodeBadge');
-    const errorStatusText = document.getElementById('errorStatusText');
-    const errorTitle = document.getElementById('errorTitle');
-    const errorMessage = document.getElementById('errorMessage');
-    const suggestionsList = document.getElementById('suggestionsList');
+  // Non-intrusive Terminal Toast Notification Handlers
+  let toastTimeout = null;
 
-    if (errorCodeBadge) errorCodeBadge.textContent = err.error_code || 'ERROR';
-    if (errorStatusText) errorStatusText.textContent = err.http_status ? `HTTP ${err.http_status}` : '';
-    if (errorTitle) errorTitle.textContent = err.title || 'Stock Not Found';
-    if (errorMessage) errorMessage.textContent = err.message || (typeof err === 'string' ? err : 'Could not generate report.');
-
-    if (suggestionsList) {
-      suggestionsList.innerHTML = '';
-      const suggestions = err.suggestions || [
-        'Verify spelling of company name or ticker',
-        'Try major Indian equities: RELIANCE, TCS, INFY, HDFCBANK, TATAMOTORS, CARTRADE, ZOMATO',
-        'Search using 6-digit BSE scrip code (e.g. 500325, 543320)'
-      ];
-      suggestions.forEach(s => {
-        const li = document.createElement('li');
-        li.textContent = s;
-        suggestionsList.appendChild(li);
-      });
+  function showToastNotification(msg, type = 'error') {
+    let toast = document.getElementById('terminalToast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'terminalToast';
+      toast.className = 'terminal-toast';
+      document.body.appendChild(toast);
     }
+    toast.innerHTML = `
+      <div class="toast-body">
+        <span class="toast-badge">${type === 'error' ? '⚠️ NOTICE' : 'ℹ️ INFO'}</span>
+        <span class="toast-msg">${escapeHtml(msg)}</span>
+      </div>
+      <button class="toast-dismiss" onclick="this.closest('.terminal-toast').classList.remove('show')">&times;</button>
+    `;
+    toast.className = `terminal-toast toast-${type} show`;
+    clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => {
+      if (toast) toast.classList.remove('show');
+    }, 5000);
+  }
 
-    errorCard.classList.remove('hidden');
-    errorCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  function hideToastNotification() {
+    const toast = document.getElementById('terminalToast');
+    if (toast) toast.classList.remove('show');
+  }
+
+  function showErrorCard(err) {
+    const msg = (err && err.message) ? err.message : (typeof err === 'string' ? err : 'Unable to generate report for this symbol. Please try another ticker.');
+    showToastNotification(msg, 'error');
   }
 
   function hideErrorCard() {
-    const errorCard = document.getElementById('errorCard');
-    if (errorCard) errorCard.classList.add('hidden');
+    hideToastNotification();
   }
-
-  const errorCloseBtn = document.getElementById('errorCloseBtn');
-  if (errorCloseBtn) errorCloseBtn.addEventListener('click', hideErrorCard);
-  const errorDismissBtn = document.getElementById('errorDismissBtn');
-  if (errorDismissBtn) errorDismissBtn.addEventListener('click', hideErrorCard);
 
   const stockInput = document.getElementById('stockInput');
   const autocompleteDropdown = document.getElementById('autocompleteDropdown');
@@ -61,6 +57,13 @@ document.addEventListener('DOMContentLoaded', () => {
   let searchTimeout = null;
   let selectedAcIndex = -1;
   let acItems = [];
+
+  // Chart state variables (declared at top level to prevent temporal dead zone ReferenceErrors)
+  let chartJsInstance = null;
+  let tvWidgetInstanceLoaded = false;
+  let currentChartMetric = 'Price-DMA50-DMA200-Volume';
+  let currentChartDays = 1095;
+  let activeStockData = null;
 
   // Global tab switcher for report tabs
   window.switchTab = function(evt, tabId) {
@@ -759,12 +762,6 @@ document.addEventListener('DOMContentLoaded', () => {
     reloadChartData();
   };
 
-  let chartJsInstance = null;
-  let tvWidgetInstanceLoaded = false;
-  let currentChartMetric = 'Price-DMA50-DMA200-Volume';
-  let currentChartDays = 1095;
-  let activeStockData = null;
-
   function initTerminalCharts(r) {
     activeStockData = r;
     currentChartMetric = 'Price-DMA50-DMA200-Volume';
@@ -1082,4 +1079,10 @@ document.addEventListener('DOMContentLoaded', () => {
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
   }
+
+  // Auto-load default institutional benchmark (RELIANCE) or URL query parameter on fresh visit
+  const urlParams = new URLSearchParams(window.location.search);
+  const initialStock = urlParams.get('ticker') || urlParams.get('query') || 'RELIANCE';
+  stockInput.value = initialStock;
+  runReport(initialStock, selectedHorizon);
 });
