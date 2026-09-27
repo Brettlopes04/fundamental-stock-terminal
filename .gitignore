@@ -7,3 +7,5 @@ cache/*.json
 env/
 venv/
 .DS_Store
+.vercel
+.env*

@@ -28,9 +28,6 @@ if os.path.exists(STATIC_DIR):
 
 @app.get("/")
 @app.get("/index.html")
-@app.get("/api")
-@app.get("/api/")
-@app.get("/api/index.py")
 def get_index():
     base_dir = os.path.dirname(os.path.abspath(__file__))
     candidates = [
