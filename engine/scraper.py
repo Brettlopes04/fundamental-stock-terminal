@@ -45,7 +45,7 @@ POPULAR_STOCKS = [
     {"name": "Infosys Ltd", "ticker": "INFY", "url": "/company/INFY/consolidated/"},
     {"name": "Cartrade Tech Ltd", "ticker": "CARTRADE", "url": "/company/CARTRADE/consolidated/"},
     {"name": "Tata Motors Ltd", "ticker": "TATAMOTORS", "url": "/company/TATAMOTORS/consolidated/"},
-    {"name": "Zomato Ltd", "ticker": "ZOMATO", "url": "/company/ZOMATO/consolidated/"},
+    {"name": "Eternal Ltd", "ticker": "ETERNAL", "url": "/company/ETERNAL/consolidated/"},
     {"name": "State Bank of India", "ticker": "SBIN", "url": "/company/SBIN/consolidated/"},
     {"name": "Bharti Airtel Ltd", "ticker": "BHARTIARTL", "url": "/company/BHARTIARTL/consolidated/"},
 ]

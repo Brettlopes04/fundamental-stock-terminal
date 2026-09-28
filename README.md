@@ -38,8 +38,8 @@ Every generated stock research report features 8 comprehensive sections:
      - Volume: Total daily shares exchanged with delivery ratio indication
    - **Interactive Overlay Toggles**: One-click toggles for individual moving average overlays without reloading.
    - **Multi-Timeframe Controls**: `1M`, `3M`, `6M`, `1Yr`, `3Yr`, `5Yr`, `10Yr`, `Max`.
-   - **Live Institutional Candlestick Widget**: Integrated TradingView candlestick chart (`NSE:{symbol}` or `BSE:{code}`).
-   - **Direct Financial & Chart Links**: Instant one-click jump to full Screener filings and TradingView multi-timeframe charts.
+   - **Direct TradingView Chart Link**: One-click jump directly to the authentic TradingView interactive chart (`https://in.tradingview.com/chart/?symbol=NSE:{ticker}`) in a new tab for deep multi-timeframe analysis.
+   - **Direct Financial Filings**: Direct link to full official Screener.in company filings and statement history.
    - **Strict Data Decoupling**: Independent error boundary ensures chart errors never block the 7 fundamental audit sections. Historical market actuals are visibly distinguished from model fair-value targets.
 
 ### 3. Non-Blocking Terminal Error Handling

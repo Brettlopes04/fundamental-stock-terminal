@@ -6,6 +6,13 @@ def generate_terminal_html(r: dict) -> str:
     ticker = html.escape(str(r.get('ticker', 'TICKER')))
     bse_code = html.escape(str(r.get('bse_code', '')))
     nse_symbol = html.escape(str(r.get('nse_symbol', ticker)))
+    tv_symbol = nse_symbol if nse_symbol else ticker
+    if tv_symbol and tv_symbol.upper() != 'N/A':
+        tradingview_url = f"https://in.tradingview.com/chart/?symbol=NSE:{tv_symbol}"
+    elif bse_code:
+        tradingview_url = f"https://in.tradingview.com/chart/?symbol=BSE:{bse_code}"
+    else:
+        tradingview_url = f"https://in.tradingview.com/chart/?symbol=NSE:{ticker}"
     sector = html.escape(str(r.get('sector', 'Diversified')))
     industry = html.escape(str(r.get('industry', 'General')))
     horizon = r.get('horizon_years', 3)
@@ -1272,33 +1279,19 @@ def generate_terminal_html(r: dict) -> str:
             <canvas id="screenerOfficialCanvas"></canvas>
           </div>
           
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 11px; color: var(--text-muted); flex-wrap: wrap; gap: 8px;">
-            <div>*Direct data stream from Screener.in official historical chart API. Volume bars indicate total daily exchanged shares with delivery ratio. Moving averages computed over authentic daily closes.</div>
-            <a href="https://www.screener.in/company/{ticker}/#chart" target="_blank" class="ext-link-btn" style="padding: 4px 10px; font-size: 11px;">Open on Screener.in ↗</a>
-          </div>
-
-        </div>
-      </div>
-
-      <!-- LIVE TECHNICAL CANDLESTICK & TRADINGVIEW -->
-      <div class="col-12">
-        <div class="card">
-          <div class="card-title">
-            <span>Live Technical Candlestick Chart (TradingView Institutional Feed)</span>
-            <span class="sa">REAL-TIME CANDLES</span>
-          </div>
-
-          <!-- TradingView Advanced Real-Time Widget -->
-          <div id="tv_chart_container" style="height: 480px; width: 100%; border-radius: 6px; overflow: hidden; border: 1px solid var(--border);"></div>
-
-          <!-- External Analysis Buttons -->
-          <div class="ext-links-strip">
-            <a href="https://www.screener.in/company/{ticker}/" target="_blank" class="ext-link-btn">
-              📈 <strong>Open on Screener.in</strong> (Full Financial Statements & Filings) ↗
-            </a>
-            <a href="https://in.tradingview.com/chart/?symbol=NSE:{ticker}" target="_blank" class="ext-link-btn">
-              ⚡ <strong>Open on TradingView Web</strong> (Multi-Timeframe Technical Charting) ↗
-            </a>
+          <!-- External Action Strip -->
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); flex-wrap: wrap; gap: 12px;">
+            <div style="font-size: 11px; color: var(--text-muted); max-width: 600px;">
+              *Direct data stream from Screener.in official historical chart API. Volume bars indicate total daily exchanged shares with delivery ratio. Moving averages computed over authentic daily closes.
+            </div>
+            <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+              <a href="{tradingview_url}" target="_blank" rel="noopener noreferrer" class="ext-link-btn" style="background: rgba(41, 98, 255, 0.15); border-color: rgba(41, 98, 255, 0.4); color: #38bdf8; font-weight: 700; padding: 6px 14px; text-decoration: none;">
+                ⚡ <strong>Open on TradingView Chart</strong> (Live Candlestick & Multi-Timeframe) ↗
+              </a>
+              <a href="https://www.screener.in/company/{ticker}/#chart" target="_blank" rel="noopener noreferrer" class="ext-link-btn" style="padding: 6px 14px; text-decoration: none;">
+                📈 <strong>Open on Screener.in</strong> (Full Financial Statements & Filings) ↗
+              </a>
+            </div>
           </div>
 
         </div>
@@ -1322,7 +1315,6 @@ def generate_terminal_html(r: dict) -> str:
   var activeChartMetric = "Price-DMA50-DMA200-Volume";
   var activeChartDays = {chart_days};
   var screenerChartInstance = null;
-  var tvWidgetInitialized = false;
 
   function switchTab(evt, tabId) {{
     var tabs = document.getElementsByClassName("tab-content");
@@ -1344,9 +1336,7 @@ def generate_terminal_html(r: dict) -> str:
         }} else {{
           screenerChartInstance.resize();
         }}
-        if (!tvWidgetInitialized) {{
-          initTradingViewWidget();
-        }}
+
       }}, 50);
     }}
   }}
@@ -1559,34 +1549,7 @@ def generate_terminal_html(r: dict) -> str:
       }});
   }}
 
-  function initTradingViewWidget() {{
-    var container = document.getElementById('tv_chart_container');
-    if (!container || tvWidgetInitialized) return;
-    if (typeof TradingView === 'undefined') return;
 
-    var symb = activeBseCode && !activeStockTicker ? ('BSE:' + activeBseCode) : ('NSE:' + activeStockTicker);
-
-    new TradingView.widget({{
-      "autosize": true,
-      "symbol": symb,
-      "interval": "D",
-      "timezone": "Asia/Kolkata",
-      "theme": "dark",
-      "style": "1",
-      "locale": "en",
-      "toolbar_bg": "#0b0f19",
-      "enable_publishing": false,
-      "hide_top_toolbar": false,
-      "hide_legend": false,
-      "save_image": false,
-      "container_id": "tv_chart_container",
-      "studies": [
-        "MASimple@tv-basicstudies",
-        "Volume@tv-basicstudies"
-      ]
-    }});
-    tvWidgetInitialized = true;
-  }}
 </script>
 
 </body>

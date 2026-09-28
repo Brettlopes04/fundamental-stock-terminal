@@ -60,7 +60,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Chart state variables (declared at top level to prevent temporal dead zone ReferenceErrors)
   let chartJsInstance = null;
-  let tvWidgetInstanceLoaded = false;
   let currentChartMetric = 'Price-DMA50-DMA200-Volume';
   let currentChartDays = 1095;
   let activeStockData = null;
@@ -247,9 +246,6 @@ document.addEventListener('DOMContentLoaded', () => {
       try { chartJsInstance.destroy(); } catch (_) {}
       chartJsInstance = null;
     }
-    const tvc = document.getElementById('tv_chart_container');
-    if (tvc) tvc.innerHTML = '';
-    tvWidgetInstanceLoaded = false;
 
     fetch(`/api/report?query=${encodeURIComponent(query)}&horizon=${horizon}`)
       .then(async res => {
@@ -812,9 +808,6 @@ document.addEventListener('DOMContentLoaded', () => {
           } else if (activeStockData.chart_data) {
             drawScreenerChart(activeStockData.chart_data, currentChartMetric);
           }
-          if (!tvWidgetInstanceLoaded) {
-            loadTradingViewWidget(activeStockData);
-          }
         }
       }, 50);
     };
@@ -1032,42 +1025,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function loadTradingViewWidget(r) {
-    const container = document.getElementById('tv_chart_container');
-    if (!container || tvWidgetInstanceLoaded) return;
-    if (!r) return;
-
-    if (typeof TradingView === 'undefined') {
-      setTimeout(() => {
-        if (!tvWidgetInstanceLoaded) loadTradingViewWidget(r);
-      }, 300);
-      return;
-    }
-
-    container.innerHTML = '';
-    const symb = (r.bse_code && !r.ticker) ? ('BSE:' + r.bse_code) : ('NSE:' + (r.nse_symbol || r.ticker));
-
-    new TradingView.widget({
-      "autosize": true,
-      "symbol": symb,
-      "interval": "D",
-      "timezone": "Asia/Kolkata",
-      "theme": "dark",
-      "style": "1",
-      "locale": "en",
-      "toolbar_bg": "#0b0f19",
-      "enable_publishing": false,
-      "hide_top_toolbar": false,
-      "hide_legend": false,
-      "save_image": false,
-      "container_id": "tv_chart_container",
-      "studies": [
-        "MASimple@tv-basicstudies",
-        "Volume@tv-basicstudies"
-      ]
-    });
-    tvWidgetInstanceLoaded = true;
-  }
 
   function escapeHtml(str) {
 
